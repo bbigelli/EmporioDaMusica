@@ -13,10 +13,15 @@ interaction's id and the service rebuilds the context, including the model's own
 reasoning steps with their signatures intact. The alternative, `store=False`,
 requires replaying every model step by hand and getting the signatures right.
 
-Server-side state is used for the conversation, and a local transcript is kept
-alongside it for two things the server cannot provide: a readable log for the
-interaction examples, and resumability that does not depend on an undocumented
-retention window. See `Conversation.transcript`.
+Server-side state drives the model; a local SQLite transcript
+(`emporio.sessions`) records what was said and which tools ran. The server
+cannot give the second: retention is undocumented, an interaction id is not
+something a human can read back, and a disputed answer needs an audit trail.
+
+Pass a `SessionStore` to persist, or leave `store` unset for an ephemeral
+conversation. `Conversation.resume` reopens a stored session; if the
+server-side id has aged out by then, the next turn silently starts a new
+server thread rather than failing.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from google import genai
@@ -43,6 +48,21 @@ RETRY_BACKOFF_SECONDS = 2.0
 TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
 
 
+def _is_stale_interaction(error: Exception) -> bool:
+    """Whether a failure means the referenced interaction no longer exists.
+
+    A 404 on a request that carried previous_interaction_id is the signal that
+    server-side history has aged out. Matched on the status code, with the
+    message checked only as a secondary hint, since the wording is not part of
+    any contract.
+    """
+    status = getattr(error, "status_code", None)
+    if status == 404:
+        return True
+    text = str(error).lower()
+    return "previous_interaction_id" in text and "not found" in text
+
+
 def _is_transient(error: Exception) -> bool:
     """Whether a failure is worth retrying.
 
@@ -54,6 +74,7 @@ def _is_transient(error: Exception) -> bool:
     if isinstance(status, int):
         return status in TRANSIENT_STATUS_CODES
     return "Timeout" in type(error).__name__
+
 
 # A turn that still wants tools after this many rounds is looping. Six is well
 # clear of the deepest legitimate chain observed (order -> product -> policy)
@@ -98,6 +119,8 @@ class Conversation:
     previous_interaction_id: str | None = None
     transcript: list[Turn] = field(default_factory=list)
     timeout: float = REQUEST_TIMEOUT_SECONDS
+    store: Any = None
+    session_id: str | None = None
 
     def __post_init__(self) -> None:
         if self.system_instruction is None:
@@ -105,6 +128,37 @@ class Conversation:
         if self.client is None:
             settings = get_settings()
             self.client = genai.Client(api_key=settings.require_api_key())
+        if self.store is not None and self.session_id is None:
+            self.session_id = self.store.create(language=self.language)
+
+    @classmethod
+    def resume(cls, store: Any, session_id: str, **kwargs: Any) -> Conversation:
+        """Reopen a stored conversation.
+
+        The local transcript is restored for display and the server-side id for
+        model continuity. If that id has since expired, the next `send` starts
+        a fresh server thread rather than failing — the customer loses the
+        model's memory of earlier turns, which is bad, but far less bad than a
+        conversation that cannot be continued at all.
+        """
+        record = store.load(session_id)
+        conversation = cls(
+            store=store,
+            session_id=session_id,
+            language=kwargs.pop("language", record["language"]),
+            previous_interaction_id=record["last_interaction_id"],
+            **kwargs,
+        )
+        conversation.transcript = [
+            Turn(
+                user_message=turn["user_message"],
+                reply=turn["reply"],
+                invocations=[ToolInvocation(**call) for call in turn["invocations"]],
+                interaction_id=turn["interaction_id"],
+            )
+            for turn in record["turns"]
+        ]
+        return conversation
 
     # -- internals --------------------------------------------------------
 
@@ -200,7 +254,21 @@ class Conversation:
 
     def send(self, message: str) -> Turn:
         """Answer one customer message, running tools until the model is done."""
-        interaction = self._create(message)
+        try:
+            interaction = self._create(message)
+        except Exception as exc:  # noqa: BLE001 - re-raised unless it is a stale id
+            if not _is_stale_interaction(exc) or self.previous_interaction_id is None:
+                raise
+            # The server-side history expired. Retention is undocumented, so
+            # this is expected eventually rather than exceptional: drop the
+            # chain and continue as a new thread instead of failing the turn.
+            logger.warning(
+                "interaction %s no longer resolvable; starting a new server thread",
+                self.previous_interaction_id,
+            )
+            self.previous_interaction_id = None
+            interaction = self._create(message)
+
         invocations: list[ToolInvocation] = []
 
         for round_number in range(MAX_TOOL_ROUNDS):
@@ -232,9 +300,31 @@ class Conversation:
             interaction_id=interaction.id,
         )
         self.transcript.append(turn)
+
+        if self.store is not None and self.session_id is not None:
+            try:
+                self.store.save_turn(
+                    session_id=self.session_id,
+                    user_message=turn.user_message,
+                    reply=turn.reply,
+                    invocations=[asdict(call) for call in turn.invocations],
+                    interaction_id=turn.interaction_id,
+                )
+            except Exception:  # noqa: BLE001 - logging must not lose an answer
+                # The customer already has their reply; failing to file it is
+                # an operations problem, not theirs.
+                logger.exception("could not persist turn for session %s", self.session_id)
+
         return turn
 
     def reset(self) -> None:
-        """Start a fresh conversation, dropping server and local history."""
+        """Start a fresh conversation, dropping server and local history.
+
+        When persistence is on this opens a *new* session rather than erasing
+        the old one: the previous conversation stays readable, which is the
+        point of keeping a transcript at all.
+        """
         self.previous_interaction_id = None
         self.transcript.clear()
+        if self.store is not None:
+            self.session_id = self.store.create(language=self.language)

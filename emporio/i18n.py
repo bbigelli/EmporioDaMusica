@@ -132,6 +132,17 @@ STRINGS: dict[str, dict[Language, str]] = {
             "this setting."
         ),
     },
+    "session": {"pt": "Sessão", "en": "Session"},
+    "persistence_note": {
+        "pt": (
+            "A conversa é gravada e pode ser retomada depois pela linha de "
+            "comando: `python -m emporio.cli --resume last`."
+        ),
+        "en": (
+            "This conversation is recorded and can be reopened later from the "
+            "command line: `python -m emporio.cli --resume last`."
+        ),
+    },
     "no_tool_call": {
         "pt": "_respondido sem consultar o sistema_",
         "en": "_answered without consulting the system_",

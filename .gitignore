@@ -11,3 +11,6 @@ venv/
 # OS
 Thumbs.db
 .DS_Store
+
+# Runtime conversation history
+data/sessions.db

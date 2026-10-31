@@ -5,8 +5,13 @@ Four commands:
     python -m emporio.cli              interactive chat
     python -m emporio.cli --lang pt    interactive chat, opening in Portuguese
     python -m emporio.cli ask "..."    one question, one answer
+    python -m emporio.cli --resume last  continue the previous conversation
+    python -m emporio.cli sessions     list recorded conversations
     python -m emporio.cli tools        inspect the data and policy layers
     python -m emporio.cli demo         run the scripted scenarios to examples/
+
+Conversations are recorded to data/sessions.db so they can be reopened later;
+`--ephemeral` skips that.
 
 `--lang en|pt` sets the language the agent opens in; it still mirrors whatever
 the customer actually writes. The CLI's own labels stay in English, since they
@@ -33,6 +38,7 @@ from rich.text import Text
 
 from emporio.config import ROOT, get_settings
 from emporio.i18n import DEFAULT_LANGUAGE, FLAGS
+from emporio.sessions import SessionStore
 
 app = typer.Typer(
     add_completion=False,
@@ -101,6 +107,17 @@ def _banner(language: str = DEFAULT_LANGUAGE) -> None:
     console.print("  [dim]/reset to start over · /exit to quit[/dim]\n")
 
 
+def _replay(conversation) -> None:
+    """Print a resumed conversation so the thread reads continuously."""
+    if not conversation.transcript:
+        return
+    count = len(conversation.transcript)
+    console.print(f"  [dim]— {count} earlier turn(s) —[/dim]\n")
+    for turn in conversation.transcript:
+        console.print(f"  [bold]you[/bold] [dim]›[/dim] {turn.user_message}")
+        _show_reply(turn)
+
+
 def _show_invocations(turn, quiet: bool) -> None:
     if quiet or not turn.invocations:
         return
@@ -145,14 +162,43 @@ def chat(
     lang: str = typer.Option(
         DEFAULT_LANGUAGE, "--lang", help="Opening language: en or pt."
     ),
+    resume: str = typer.Option(
+        None, "--resume", help="Session id, short prefix, or 'last'."
+    ),
+    ephemeral: bool = typer.Option(
+        False, "--ephemeral", help="Do not record this conversation."
+    ),
 ) -> None:
     """Interactive conversation with the agent."""
     _require_key()
     from emporio.agent import Conversation
 
     lang = _validate_language(lang)
-    _banner(lang)
-    conversation = Conversation(language=lang)
+    store = None if ephemeral else SessionStore()
+
+    if resume:
+        if store is None:
+            console.print("\n  [red]--resume cannot be combined with --ephemeral[/red]\n")
+            raise typer.Exit(code=2)
+        session_id = store.resolve(resume)
+        if session_id is None:
+            console.print(
+                f"\n  [red]no single session matches {resume!r}[/red]"
+                "  ·  list them with: python -m emporio.cli sessions\n"
+            )
+            raise typer.Exit(code=2)
+        conversation = Conversation.resume(store, session_id, language=lang)
+        _banner(lang)
+        _replay(conversation)
+    else:
+        conversation = Conversation(language=lang, store=store)
+        _banner(lang)
+
+    if conversation.session_id:
+        console.print(
+            f"  [dim]session[/dim] {conversation.session_id.split('-')[0]}"
+            "  [dim]· resume later with --resume last[/dim]\n"
+        )
 
     while True:
         try:
@@ -244,6 +290,32 @@ def tools(
 
 
 @app.command()
+def sessions(limit: int = typer.Option(10, "--limit", help="How many to show.")) -> None:
+    """List recorded conversations, most recent first."""
+    recorded = SessionStore().list_recent(limit=limit)
+    if not recorded:
+        console.print("\n  [dim]no conversations recorded yet[/dim]\n")
+        return
+
+    table = Table(box=None, pad_edge=False, header_style="dim")
+    table.add_column("id")
+    table.add_column("turns", justify="right")
+    table.add_column("updated")
+    table.add_column("opened with")
+    for item in recorded:
+        preview = item.preview[:52] + ("…" if len(item.preview) > 52 else "")
+        table.add_row(
+            item.short_id,
+            str(item.turn_count),
+            item.updated_at.replace("T", " ")[:16],
+            preview,
+        )
+    console.print()
+    console.print(table)
+    console.print("\n  [dim]resume with: python -m emporio.cli --resume <id>[/dim]\n")
+
+
+@app.command()
 def demo(
     output: Path = typer.Option(
         ROOT / "examples", "--output", help="Directory for the generated transcripts."
@@ -260,7 +332,7 @@ def demo(
 def main(ctx: typer.Context) -> None:
     """Default to interactive chat when no command is given."""
     if ctx.invoked_subcommand is None:
-        chat(quiet=False, lang=DEFAULT_LANGUAGE)
+        chat(quiet=False, lang=DEFAULT_LANGUAGE, resume=None, ephemeral=False)
 
 
 if __name__ == "__main__":

@@ -103,9 +103,16 @@ def sidebar() -> tuple[Language, bool]:
             st.session_state.pop("messages", None)
             st.rerun()
 
+        conversation = st.session_state.get("conversation")
+        if conversation is not None and conversation.session_id:
+            st.caption(
+                f"**{t('session', language)}**  \n`{conversation.session_id.split('-')[0]}`"
+            )
+
         st.divider()
         st.caption(t("tool_calls_note", language))
         st.caption(t("bilingual_note", language))
+        st.caption(t("persistence_note", language))
         return language, True
 
 
@@ -150,8 +157,11 @@ def main() -> None:
 
     if "conversation" not in st.session_state:
         from emporio.agent import Conversation
+        from emporio.sessions import SessionStore
 
-        st.session_state.conversation = Conversation(language=language)
+        st.session_state.conversation = Conversation(
+            language=language, store=SessionStore()
+        )
 
     with st.chat_message("assistant"):
         with st.spinner(t("thinking", language)):

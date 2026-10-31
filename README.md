@@ -241,10 +241,23 @@ several later orders then being dated in the future.
 
 ### Language
 
-Code, comments, commits and this README are in English. The agent replies in
-the customer's language — Portuguese to a Portuguese message, English to an
-English one — because the store, its data and its manual are Brazilian, and an
-instrument shop in Campo Grande answering in English would break the persona.
+The rule is one line: **everything an engineer reads is English; everything a
+customer reads follows the customer.**
+
+| Layer | Language | Why |
+| --- | --- | --- |
+| Code, comments, commits, README | English | Engineering artifacts |
+| CLI and Streamlit chrome | English | Labels, placeholders, errors — read by whoever runs this, not by a customer |
+| Tool result keys and status values | English | Structure the model branches on: `status`, `availability`, `available_routes` |
+| Tool result prose | Portuguese | `availability_label`, `summary`, `conditions` are the store's own wording, quoted from a Portuguese manual. Pre-translating means a second copy of every rule, free to drift |
+| Agent replies | Mirrors the customer | Portuguese in, Portuguese out; English in, English out |
+| Scenario customer messages | As written | Four scenarios are a Brazilian customer; `05` is an English one |
+
+The agent replies in the customer's language because the store, its data and
+its manual are Brazilian, and an instrument shop in Campo Grande answering a
+Brazilian customer in English would break the persona. The reverse case —
+translating Portuguese tool output into an English reply — is what
+[example 5](examples/05-english-customer-shipping.md) demonstrates end to end.
 
 This did not work on the first attempt. The rule existed but sat mid-prompt,
 and the first generated run of [example

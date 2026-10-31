@@ -12,6 +12,18 @@ Each tool returns plain JSON-serialisable data, including a pre-formatted
 Brazilian currency string. Formatting money is not a task to delegate to a
 language model when `R$ 1.967,18` and `R$ 1,967.18` differ by a factor of a
 thousand to a reader.
+
+## Language inside tool results
+
+Keys, status values and enum-like fields are English, because they are
+structure the model branches on: `status`, `availability`, `available_routes`.
+
+Human-readable fields are Brazilian Portuguese — `availability_label`,
+`tracking_note`, `summary`, `conditions`. These are the store's own wording,
+quoted from a Portuguese policy manual about a Portuguese catalog, and
+pre-translating them would mean maintaining a second copy of every rule that
+could drift from the source. The agent translates them when the customer
+writes in English, which is what `examples/05` demonstrates end to end.
 """
 
 from __future__ import annotations
@@ -287,7 +299,8 @@ def get_active_promotions() -> dict[str, Any]:
                 "promotional_price_display": brl(row["effective_price_brl"]),
                 "price_presentation": (
                     f"{brl(row['effective_price_brl'])} "
-                    f"(de {brl(row['list_price_brl'])}, {row['discount_percent']}% off)"
+                    f"(de {brl(row['list_price_brl'])}, "
+                    f"{row['discount_percent']}% de desconto)"
                 ),
                 "availability": row["availability"],
                 "availability_label": AVAILABILITY_LABELS[row["availability"]],

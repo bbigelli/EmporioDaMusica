@@ -127,7 +127,7 @@ def _render(scenario: Scenario, turns: list, settings) -> str:
         "",
     ]
     for turn in turns:
-        lines += [f"**Cliente**", "", turn.user_message, ""]
+        lines += ["**Customer**", "", turn.user_message, ""]
         if turn.invocations:
             lines.append("<details><summary>Tool calls</summary>")
             lines.append("")
@@ -144,7 +144,7 @@ def _render(scenario: Scenario, turns: list, settings) -> str:
             lines += ["</details>", ""]
         else:
             lines += ["<sub>No tool call — answered from the system instruction.</sub>", ""]
-        lines += ["**Atendente**", "", turn.reply, "", "---", ""]
+        lines += ["**Agent**", "", turn.reply, "", "---", ""]
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -179,12 +179,12 @@ def run_all(output: Path, console) -> list[tuple[Scenario, Path]]:
         conversation = Conversation()
         turns = []
         for message in scenario.messages:
-            console.print(f"  [dim]você ›[/dim] {message}")
+            console.print(f"  [dim]you ›[/dim] {message}")
             turn = conversation.send(message)
             for call in turn.invocations:
                 console.print(f"    [yellow]⚙[/yellow] [dim]{call.summary()}[/dim]")
             first_line = turn.reply.splitlines()[0] if turn.reply else ""
-            console.print(f"  [cyan]atendente ›[/cyan] {first_line[:88]}")
+            console.print(f"  [cyan]agent ›[/cyan] {first_line[:88]}")
             turns.append(turn)
 
         path = output / f"{scenario.slug}.md"

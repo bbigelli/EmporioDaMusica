@@ -32,8 +32,9 @@ creates a Cloud project for you and needs no billing details.
 
 ```bash
 python -m emporio.cli                                   # interactive chat
+python -m emporio.cli --lang pt                         # opening in Portuguese
 python -m emporio.cli ask "quanto custa o Takamine GD20?"
-streamlit run app.py                                    # web chat
+streamlit run app.py                                    # web chat, with a 🇧🇷/🇺🇸 switch
 ```
 
 Tool calls are shown inline. In a real product they would be hidden; here they
@@ -45,7 +46,7 @@ and run the whole test suite:
 
 ```bash
 python -m emporio.cli tools --policy "posso devolver se me arrependi?"
-python -m unittest discover -s tests -v                 # 94 tests, no key, no network
+python -m unittest discover -s tests -v                 # 105 tests, no key, no network
 ```
 
 The generated data artifacts are committed, so neither pipeline needs to run.
@@ -241,23 +242,39 @@ several later orders then being dated in the future.
 
 ### Language
 
-The rule is one line: **everything an engineer reads is English; everything a
-customer reads follows the customer.**
+The rule is one line: **everything written in this repository is English;
+everything the customer reads follows the customer.**
 
 | Layer | Language | Why |
 | --- | --- | --- |
 | Code, comments, commits, README | English | Engineering artifacts |
-| CLI and Streamlit chrome | English | Labels, placeholders, errors — read by whoever runs this, not by a customer |
-| Tool result keys and status values | English | Structure the model branches on: `status`, `availability`, `available_routes` |
-| Tool result prose | Portuguese | `availability_label`, `summary`, `conditions` are the store's own wording, quoted from a Portuguese manual. Pre-translating means a second copy of every rule, free to drift |
+| CLI labels | English | Developer surface |
+| Streamlit interface | 🇧🇷 / 🇺🇸 switchable | A reviewer and a store employee want different ones |
+| Everything in a tool result | English | Keys, statuses *and* prose: `summary`, `conditions`, `availability_label`. Written here, so written in English |
+| Catalog data and policy text | Portuguese | Supplied *data*, not code — see below |
 | Agent replies | Mirrors the customer | Portuguese in, Portuguese out; English in, English out |
-| Scenario customer messages | As written | Four scenarios are a Brazilian customer; `05` is an English one |
 
-The agent replies in the customer's language because the store, its data and
-its manual are Brazilian, and an instrument shop in Campo Grande answering a
-Brazilian customer in English would break the persona. The reverse case —
-translating Portuguese tool output into an English reply — is what
-[example 5](examples/05-english-customer-shipping.md) demonstrates end to end.
+The Streamlit sidebar has a 🇧🇷 / 🇺🇸 selector. It switches the interface copy
+and the language the agent opens in, without locking it: write in the other
+language and the reply follows you. The CLI takes `--lang en|pt` for the same
+purpose. Changing the selection clears the thread, because the choice is baked
+into the system instruction and a half-switched conversation reads worse than
+a fresh one.
+
+**Two things stay in Portuguese, deliberately.** Catalog values from the CSVs
+(product names, categories, descriptions) and the policy text returned by
+`search_store_policies`, extracted from the store's own PDF. Those are the
+sources the challenge supplied; translating them in the pipeline would put an
+unverifiable paraphrase of a legal term — "direito de arrependimento", "garantia
+legal" — between the manual and the customer, with nothing to check it against.
+The agent translates them at reply time instead, which is visible in
+[example 5](examples/05-english-customer-shipping.md): English question,
+English answer, Portuguese policy section underneath it.
+
+The reverse trip is the common one and worth checking too. The tool layer now
+answers in English and the customer is usually Brazilian, so almost every reply
+is a translation — [example 3](examples/03-return-window-expired.md) turns an
+English `conditions` list back into the correct Brazilian consumer-law wording.
 
 This did not work on the first attempt. The rule existed but sat mid-prompt,
 and the first generated run of [example
@@ -269,7 +286,7 @@ signal about which language to reply in.
 
 ## Testing
 
-94 tests, no API key and no network required. The agent loop is driven by a
+105 tests, no API key and no network required. The agent loop is driven by a
 stub interactions client, so its real decisions are covered: tool-failure
 handling, the six-round cap on runaway loops, retry and backoff behaviour, and
 conversation threading.

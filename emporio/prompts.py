@@ -182,8 +182,13 @@ WORKFLOW = """
 """.strip()
 
 
-def build_system_instruction() -> str:
+def build_system_instruction(language: str | None = None) -> str:
     """Assemble the system instruction.
+
+    `language` is the interface language the customer picked, if any. It sets
+    which language to open in and to fall back on when a message is ambiguous
+    — it does **not** override mirroring, because someone who switches the UI
+    to Portuguese and then types in English still wants an English answer.
 
     The reference date is stated explicitly because every deadline in the
     manual is relative, and a model that assumes its own training-time date
@@ -211,4 +216,16 @@ def build_system_instruction() -> str:
         "customer:\n\n" + policies.pipeline_notes(),
         LANGUAGE_REMINDER,
     ]
+
+    if language in ("pt", "en"):
+        chosen = "Brazilian Portuguese" if language == "pt" else "English"
+        sections.insert(
+            2,
+            "# Selected language\n\n"
+            f"The customer has set the interface to {chosen}, so open in "
+            f"{chosen} and use it whenever a message is too short or ambiguous "
+            "to tell. This does not override the rule above: if they write in "
+            "the other language, answer in that one.",
+        )
+
     return "\n\n---\n\n".join(sections)

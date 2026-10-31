@@ -129,7 +129,7 @@ class CatalogToolTests(unittest.TestCase):
         result = tools.get_active_promotions()
         self.assertEqual(4, result["count"])
         self.assertTrue(
-            all("de R$" in item["price_presentation"] for item in result["promotions"])
+            all("down from R$" in item["price_presentation"] for item in result["promotions"])
         )
 
 
@@ -140,7 +140,7 @@ class OrderToolTests(unittest.TestCase):
         order = tools.get_order_status(13)
         self.assertFalse(order["dispatched"])
         self.assertIsNone(order["tracking_code"])
-        self.assertIn("ainda não foi despachado", order["tracking_note"])
+        self.assertIn("has not been dispatched yet", order["tracking_note"])
 
     def test_dispatched_order_has_tracking(self) -> None:
         from emporio import tools

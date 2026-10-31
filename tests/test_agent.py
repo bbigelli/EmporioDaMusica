@@ -160,7 +160,7 @@ class ToolLoopTests(unittest.TestCase):
         convo.send("pedido 7")
         raw = client.interactions.requests[1]["input"][0]["result"]
         self.assertIsInstance(raw, str)
-        self.assertIn("entregue", raw)
+        self.assertIn("delivered", raw)
         # ensure_ascii=False, so accented characters are not escaped.
         self.assertNotIn("\\u00e", raw)
         self.assertEqual("ok", json.loads(raw)["status"])

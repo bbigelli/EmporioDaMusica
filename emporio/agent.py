@@ -93,12 +93,15 @@ class Conversation:
     """A multi-turn conversation with one customer."""
 
     client: Any = None
-    system_instruction: str = field(default_factory=build_system_instruction)
+    language: str | None = None
+    system_instruction: str | None = None
     previous_interaction_id: str | None = None
     transcript: list[Turn] = field(default_factory=list)
     timeout: float = REQUEST_TIMEOUT_SECONDS
 
     def __post_init__(self) -> None:
+        if self.system_instruction is None:
+            self.system_instruction = build_system_instruction(self.language)
         if self.client is None:
             settings = get_settings()
             self.client = genai.Client(api_key=settings.require_api_key())

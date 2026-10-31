@@ -45,19 +45,20 @@ MIXED_PAYMENT_MIN_BRL = 2000.0
 # Section 5.1, metropolitan Campo Grande only.
 FREE_SHIPPING_THRESHOLD_BRL = 500.0
 FLAT_SHIPPING_FEE_BRL = 35.0
-METRO_DELIVERY_DAYS = "1 a 3 dias úteis"
+METRO_DELIVERY_DAYS = "1 to 3 business days"
 
 # Section 5.2. Carriers outside the metropolitan region; the actual fee is
 # quoted from the destination postcode, weight and dimensions, so no amount is
-# stated here — the agent must not invent one.
+# stated here — the agent must not invent one. Carrier names are proper nouns
+# and stay as the Brazilian carriers are actually called.
 CARRIERS: tuple[dict[str, str], ...] = (
-    {"name": "PAC (Correios)", "estimate": "5 a 12 dias úteis"},
-    {"name": "SEDEX (Correios)", "estimate": "2 a 5 dias úteis"},
-    {"name": "Jadlog (.package)", "estimate": "3 a 8 dias úteis"},
+    {"name": "PAC (Correios)", "estimate": "5 to 12 business days"},
+    {"name": "SEDEX (Correios)", "estimate": "2 to 5 business days"},
+    {"name": "Jadlog (.package)", "estimate": "3 to 8 business days"},
 )
 BULKY_CATEGORIES_NOTE = (
-    "Instrumentos de grande porte (baterias acústicas, pianos digitais, "
-    "contrabaixos) podem exigir frete especial com cotação individual."
+    "Large instruments (acoustic drum kits, digital pianos, double basses) may "
+    "require special freight quoted individually."
 )
 
 # --- Returns, exchanges and warranty ------------------------------------
@@ -68,9 +69,9 @@ LEGAL_WARRANTY_DAYS = 90  # Section 8.1, from delivery
 REFUND_BUSINESS_DAYS = 10  # Section 4.1
 
 INELIGIBLE_FOR_EXCHANGE = (
-    "Instrumentos com personalização ou ajustes sob encomenda (setup, regulagem especial).",
-    'Produtos adquiridos em promoções de liquidação com aviso explícito de "venda final".',
-    "Boquilhas de instrumentos de sopro, por questões de higiene.",
+    "Instruments customised or set up to order (special setup or adjustment).",
+    'Items bought in clearance promotions explicitly marked "final sale".',
+    "Wind instrument mouthpieces, for hygiene reasons.",
 )
 
 OrderStatus = Literal["pending", "confirmed", "shipped", "delivered", "cancelled"]
@@ -153,35 +154,37 @@ def quote_payment(
     plans = instalment_plans(effective)
     max_instalments = max((int(plan["instalments"]) for plan in plans), default=0)
 
+    # PIX and boleto are Brazilian payment instruments with no English
+    # equivalent, so the names stay; only the descriptions are translated.
     options = [
         PaymentOption(
             method="PIX",
             total_brl=pix_total,
             detail=(
-                f"à vista com {PIX_DISCOUNT_PERCENT}% de desconto"
+                f"paid in full, with a {PIX_DISCOUNT_PERCENT}% discount"
                 if pix_discount_applies
-                else "à vista; o desconto de PIX não se acumula com o preço promocional"
+                else "paid in full; the PIX discount does not stack with a promotional price"
             ),
         ),
         PaymentOption(
-            method="Cartão de débito",
+            method="Debit card",
             total_brl=round_brl(effective),
-            detail="à vista, todas as bandeiras",
+            detail="paid in full, all card networks accepted",
         ),
         PaymentOption(
-            method="Boleto bancário",
+            method="Boleto (bank slip)",
             total_brl=round_brl(effective),
-            detail="à vista, compensação em até 3 dias úteis",
+            detail="paid in full, clears within 3 business days",
         ),
     ]
     if max_instalments >= 1:
         best = plans[-1]
         options.append(
             PaymentOption(
-                method="Cartão de crédito",
+                method="Credit card",
                 total_brl=round_brl(effective),
                 detail=(
-                    f"até {best['instalments']}x sem juros de "
+                    f"up to {best['instalments']} interest-free instalments of "
                     f"{brl(float(best['instalment_brl']))}"
                 ),
             )
@@ -190,14 +193,14 @@ def quote_payment(
     notes: list[str] = []
     if on_promotion:
         notes.append(
-            f"Preço de tabela {brl(list_price_brl)}, com {discount_percent}% de desconto "
-            f"promocional. Promoções não são cumulativas."
+            f"List price {brl(list_price_brl)}, with a {discount_percent}% promotional "
+            "discount. Promotions are not cumulative."
         )
     mixed_allowed = effective > MIXED_PAYMENT_MIN_BRL
     if mixed_allowed:
         notes.append(
-            f"Compras acima de {brl(MIXED_PAYMENT_MIN_BRL)} podem combinar formas de "
-            "pagamento (ex.: PIX + cartão)."
+            f"Purchases above {brl(MIXED_PAYMENT_MIN_BRL)} may combine payment methods "
+            "(for example PIX plus card)."
         )
 
     return PaymentQuote(
@@ -230,11 +233,11 @@ def quote_shipping(order_total_brl: float, metropolitan: bool = True) -> dict[st
             "region": "outside_metropolitan_campo_grande",
             "fee_brl": None,
             "fee_note": (
-                "O valor do frete é calculado com base no CEP de destino, peso e "
-                "dimensões do produto."
+                "The shipping cost is calculated from the destination postcode, "
+                "weight and dimensions of the product."
             ),
             "carriers": [dict(carrier) for carrier in CARRIERS],
-            "insurance": "Todos os envios incluem seguro contra extravios e danos.",
+            "insurance": "Every shipment includes insurance against loss and damage.",
             "bulky_note": BULKY_CATEGORIES_NOTE,
         }
 
@@ -244,15 +247,15 @@ def quote_shipping(order_total_brl: float, metropolitan: bool = True) -> dict[st
         "fee_brl": 0.0 if free else FLAT_SHIPPING_FEE_BRL,
         "free_shipping": free,
         "fee_note": (
-            f"Frete grátis para pedidos acima de {brl(FREE_SHIPPING_THRESHOLD_BRL)}."
+            f"Free shipping on orders above {brl(FREE_SHIPPING_THRESHOLD_BRL)}."
             if free
             else (
-                f"Pedidos de até {brl(FREE_SHIPPING_THRESHOLD_BRL)} pagam taxa fixa "
-                f"de {brl(FLAT_SHIPPING_FEE_BRL)}."
+                f"Orders up to {brl(FREE_SHIPPING_THRESHOLD_BRL)} pay a flat fee of "
+                f"{brl(FLAT_SHIPPING_FEE_BRL)}."
             )
         ),
         "delivery_estimate": METRO_DELIVERY_DAYS,
-        "carrier": "Motoboy próprio; o cliente é contactado por telefone antes da entrega.",
+        "carrier": "Own courier; the customer is phoned before delivery.",
     }
 
 
@@ -286,21 +289,20 @@ def _window(
             allowed=False,
             deadline=None,
             days_remaining=None,
-            reason=f"Não há {start_label} registrada para este pedido.",
+            reason=f"No {start_label} date is recorded for this order.",
             conditions=conditions,
         )
     deadline = start + timedelta(days=span_days)
     remaining = (deadline - reference).days
     if remaining >= 0:
         reason = (
-            f"Prazo de {span_days} dias corridos a partir d{start_label} "
-            f"({start.isoformat()}); vence em {deadline.isoformat()}."
+            f"{span_days} calendar days from {start_label} ({start.isoformat()}); "
+            f"closes on {deadline.isoformat()}, {remaining} days from now."
         )
     else:
         reason = (
-            f"Prazo de {span_days} dias corridos a partir d{start_label} "
-            f"({start.isoformat()}) venceu em {deadline.isoformat()}, "
-            f"há {abs(remaining)} dias."
+            f"{span_days} calendar days from {start_label} ({start.isoformat()}); "
+            f"closed on {deadline.isoformat()}, {abs(remaining)} days ago."
         )
     return ReturnWindow(
         kind=kind,
@@ -339,8 +341,8 @@ def evaluate_return_request(
             "order_status": order_status,
             "applicable": False,
             "summary": (
-                "Pedido cancelado. Não há devolução a processar; se houve cobrança, "
-                "o estorno segue a forma de pagamento original."
+                "Order cancelled. There is nothing to return; if it was charged, the "
+                "refund follows the original payment method."
             ),
             "windows": [],
             "ineligible_items": list(INELIGIBLE_FOR_EXCHANGE),
@@ -348,28 +350,30 @@ def evaluate_return_request(
 
     if order_status in ("pending", "confirmed", "shipped"):
         status_label = {
-            "pending": "aguardando confirmação de pagamento",
-            "confirmed": "confirmado e em preparação",
-            "shipped": "em trânsito",
+            "pending": "awaiting payment confirmation",
+            "confirmed": "confirmed and being prepared",
+            "shipped": "in transit",
         }[order_status]
         # The cancel-before-dispatch route is only open while the order is
         # still in the store's hands; suggesting it for an order already in
         # transit contradicts the status in the same sentence.
         next_step = (
-            "O pedido ainda não foi despachado, então pode ser cancelado antes do envio."
+            "The order has not been dispatched yet, so it can still be cancelled "
+            "before shipping."
             if order_status in ("pending", "confirmed")
             else (
-                "O pedido já está em trânsito. Após o recebimento, abre-se o prazo de "
-                f"{WITHDRAWAL_DAYS} dias para devolução por arrependimento. Em caso de "
-                "avaria visível, o cliente deve recusar o recebimento e contatar a loja."
+                "The order is already in transit. Once it arrives, the "
+                f"{WITHDRAWAL_DAYS}-day withdrawal window opens. If the package "
+                "arrives visibly damaged, the customer should refuse delivery and "
+                "contact the store immediately."
             )
         )
         return {
             "order_status": order_status,
             "applicable": False,
             "summary": (
-                f"Pedido {status_label}; o produto ainda não foi recebido, então os "
-                f"prazos de devolução não começaram a contar. {next_step}"
+                f"Order is {status_label}; the product has not been received, so no "
+                f"return deadline has started counting. {next_step}"
             ),
             "windows": [],
             "ineligible_items": list(INELIGIBLE_FOR_EXCHANGE),
@@ -381,11 +385,12 @@ def evaluate_return_request(
             section="4.1 Direito de Arrependimento",
             start=delivery_date,
             span_days=WITHDRAWAL_DAYS,
-            start_label="o recebimento",
+            start_label="delivery",
             conditions=[
-                "Embalagem original, sem sinais de uso, com todos os acessórios e manuais.",
-                f"Reembolso na forma de pagamento original em até {REFUND_BUSINESS_DAYS} dias úteis.",
-                "Frete de devolução por conta da loja.",
+                "Original packaging, unused, with all accessories and manuals.",
+                f"Refunded to the original payment method within {REFUND_BUSINESS_DAYS} "
+                "business days.",
+                "Return shipping is paid by the store.",
             ],
             reference=reference,
         ),
@@ -394,11 +399,13 @@ def evaluate_return_request(
             section="4.2 Trocas por Defeito",
             start=order_date,
             span_days=DEFECT_EXCHANGE_DAYS,
-            start_label="a compra",
+            start_label="purchase",
             conditions=[
-                "Vale para defeito de fabricação.",
-                "Após o prazo, a garantia é acionada com o fabricante; a loja pode intermediar.",
-                "Não cobre mau uso, quedas, umidade excessiva ou modificações não autorizadas.",
+                "Applies to manufacturing defects.",
+                "After the deadline the manufacturer's warranty applies; the store can "
+                "act as intermediary.",
+                "Does not cover misuse, drops, excessive humidity or unauthorised "
+                "modifications.",
             ],
             reference=reference,
         ),
@@ -407,11 +414,11 @@ def evaluate_return_request(
             section="4.3 Trocas por Preferência",
             start=delivery_date,
             span_days=PREFERENCE_EXCHANGE_DAYS,
-            start_label="o recebimento",
+            start_label="delivery",
             conditions=[
-                "Sujeita à disponibilidade do produto desejado.",
-                "Produto em perfeito estado e na embalagem original.",
-                "Diferenças de valor são cobradas ou reembolsadas conforme o caso.",
+                "Subject to availability of the desired product.",
+                "Product in perfect condition and in its original packaging.",
+                "Any price difference is charged or refunded as applicable.",
             ],
             reference=reference,
         ),
@@ -420,10 +427,10 @@ def evaluate_return_request(
             section="8.1 Garantia Legal",
             start=delivery_date,
             span_days=LEGAL_WARRANTY_DAYS,
-            start_label="o recebimento",
+            start_label="delivery",
             conditions=[
-                "Garantia legal de 90 dias contra defeitos de fabricação.",
-                "A garantia do fabricante pode ser maior, de 6 meses a 2 anos.",
+                "Statutory 90-day warranty against manufacturing defects.",
+                "The manufacturer's own warranty may be longer, from 6 months to 2 years.",
             ],
             reference=reference,
         ),
@@ -438,9 +445,9 @@ def evaluate_return_request(
         "delivery_date_is_estimated": delivery_date is not None,
         "available_routes": available,
         "summary": (
-            "Nenhum prazo de troca ou devolução segue aberto para este pedido."
+            "No return or exchange window is still open for this order."
             if not available
-            else f"Rotas ainda disponíveis: {', '.join(available)}."
+            else f"Routes still available: {', '.join(available)}."
         ),
         "windows": [
             {

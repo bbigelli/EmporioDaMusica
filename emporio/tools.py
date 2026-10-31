@@ -15,15 +15,20 @@ thousand to a reader.
 
 ## Language inside tool results
 
-Keys, status values and enum-like fields are English, because they are
-structure the model branches on: `status`, `availability`, `available_routes`.
+Everything written in this repository is English, including the prose fields
+the model reads: `availability_label`, `tracking_note`, `summary`,
+`conditions`. The agent translates them at reply time, so a Brazilian customer
+still gets Portuguese — that round trip is the common case and is exercised by
+four of the five transcripts in `examples/`.
 
-Human-readable fields are Brazilian Portuguese — `availability_label`,
-`tracking_note`, `summary`, `conditions`. These are the store's own wording,
-quoted from a Portuguese policy manual about a Portuguese catalog, and
-pre-translating them would mean maintaining a second copy of every rule that
-could drift from the source. The agent translates them when the customer
-writes in English, which is what `examples/05` demonstrates end to end.
+Two things stay in Portuguese, because they are *data* rather than code and
+rewriting them would mean editing the sources the challenge supplied:
+
+- Catalog values from the CSVs: product names, category names, descriptions.
+- Policy text returned by `search_store_policies`, extracted from the store's
+  PDF manual. Paraphrasing a refund window into English in the pipeline would
+  put a translation of a legal term between the manual and the customer, with
+  no way to check it against the source.
 """
 
 from __future__ import annotations
@@ -43,18 +48,18 @@ MAX_SEARCH_RESULTS = 25
 DEFAULT_SEARCH_RESULTS = 10
 
 AVAILABILITY_LABELS = {
-    "available": "disponível",
-    "out_of_stock": "sem estoque no momento",
-    "discontinued": "descontinuado, fora de linha",
-    "coming_soon": "em breve, ainda não disponível para venda",
+    "available": "in stock",
+    "out_of_stock": "temporarily out of stock",
+    "discontinued": "discontinued, no longer in the catalog",
+    "coming_soon": "coming soon, not yet available for purchase",
 }
 
 ORDER_STATUS_LABELS = {
-    "pending": "aguardando confirmação de pagamento",
-    "confirmed": "confirmado, em preparação",
-    "shipped": "despachado, em trânsito",
-    "delivered": "entregue",
-    "cancelled": "cancelado",
+    "pending": "awaiting payment confirmation",
+    "confirmed": "confirmed, being prepared",
+    "shipped": "dispatched, in transit",
+    "delivered": "delivered",
+    "cancelled": "cancelled",
 }
 
 
@@ -83,8 +88,8 @@ def _product_payload(row: dict[str, Any], *, full: bool = False) -> dict[str, An
             # percentage alongside any promotional price.
             "price_presentation": (
                 f"{brl(row['effective_price_brl'])} "
-                f"(de {brl(row['list_price_brl'])}, "
-                f"{row['discount_percent']}% de desconto)"
+                f"(down from {brl(row['list_price_brl'])}, "
+                f"{row['discount_percent']}% off)"
             ),
         }
     else:
@@ -299,8 +304,8 @@ def get_active_promotions() -> dict[str, Any]:
                 "promotional_price_display": brl(row["effective_price_brl"]),
                 "price_presentation": (
                     f"{brl(row['effective_price_brl'])} "
-                    f"(de {brl(row['list_price_brl'])}, "
-                    f"{row['discount_percent']}% de desconto)"
+                    f"(down from {brl(row['list_price_brl'])}, "
+                    f"{row['discount_percent']}% off)"
                 ),
                 "availability": row["availability"],
                 "availability_label": AVAILABILITY_LABELS[row["availability"]],
@@ -308,9 +313,9 @@ def get_active_promotions() -> dict[str, Any]:
             for row in rows
         ],
         "rules": [
-            "Promoções não são cumulativas.",
-            "O desconto de PIX (5%) não se aplica sobre preços já promocionais.",
-            "Promoções estão sujeitas à disponibilidade de estoque, sem rain check.",
+            "Promotions are not cumulative.",
+            "The 5% PIX discount does not apply on top of an already promotional price.",
+            "Promotions are subject to stock availability; no rain checks.",
         ],
     }
 
@@ -357,10 +362,10 @@ def get_order_status(order_id: int) -> dict[str, Any]:
         "tracking_code": order["tracking_code"],
         "estimated_delivery": order["estimated_delivery"],
         "tracking_note": (
-            "O código de rastreamento é enviado por e-mail e WhatsApp assim que o "
-            "pedido é despachado; este pedido ainda não foi despachado."
+            "The tracking code is sent by email and WhatsApp as soon as the order "
+            "is dispatched; this order has not been dispatched yet."
             if not dispatched
-            else "Rastreamento disponível no site dos Correios ou da Jadlog."
+            else "Trackable on the Correios or Jadlog website."
         ),
         "internal_note": order["notes"],
         "items": [

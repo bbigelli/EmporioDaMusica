@@ -29,7 +29,7 @@ class PaymentTests(unittest.TestCase):
         )
         self.assertFalse(quote.pix_discount_applies)
         self.assertAlmostEqual(1967.18, quote.pix_total_brl, places=2)
-        self.assertTrue(any("não são cumulativas" in note for note in quote.notes))
+        self.assertTrue(any("not cumulative" in note for note in quote.notes))
 
     def test_promotional_price_is_presented_with_its_original(self) -> None:
         """Section 6.2 requires the original price and the percentage."""
@@ -128,7 +128,7 @@ class ReturnWindowTests(unittest.TestCase):
         self.assertEqual(["legal_warranty"], assessment["available_routes"])
         withdrawal = next(w for w in assessment["windows"] if w["kind"] == "withdrawal")
         self.assertFalse(withdrawal["allowed"])
-        self.assertIn("venceu em 2026-02-24", withdrawal["reason"])
+        self.assertIn("closed on 2026-02-24", withdrawal["reason"])
 
     def test_defect_window_runs_from_purchase_not_delivery(self) -> None:
         """Section 4.2 counts 30 days from the purchase; 4.1 counts 7 from
@@ -163,8 +163,8 @@ class ReturnWindowTests(unittest.TestCase):
             delivery_date=date(2026, 3, 28),
             reference=REFERENCE,
         )
-        self.assertNotIn("cancelado antes do envio", shipped["summary"])
-        self.assertIn("em trânsito", shipped["summary"])
+        self.assertNotIn("cancelled before shipping", shipped["summary"])
+        self.assertIn("in transit", shipped["summary"])
 
         confirmed = rules.evaluate_return_request(
             order_status="confirmed",
@@ -172,7 +172,7 @@ class ReturnWindowTests(unittest.TestCase):
             delivery_date=None,
             reference=REFERENCE,
         )
-        self.assertIn("cancelado antes do envio", confirmed["summary"])
+        self.assertIn("cancelled before shipping", confirmed["summary"])
 
     def test_cancelled_order_has_nothing_to_return(self) -> None:
         assessment = rules.evaluate_return_request(
@@ -182,7 +182,7 @@ class ReturnWindowTests(unittest.TestCase):
             reference=REFERENCE,
         )
         self.assertFalse(assessment["applicable"])
-        self.assertIn("cancelado", assessment["summary"])
+        self.assertIn("cancelled", assessment["summary"])
 
     def test_missing_delivery_date_is_reported_not_assumed(self) -> None:
         assessment = rules.evaluate_return_request(
@@ -194,7 +194,7 @@ class ReturnWindowTests(unittest.TestCase):
         withdrawal = next(w for w in assessment["windows"] if w["kind"] == "withdrawal")
         self.assertFalse(withdrawal["allowed"])
         self.assertIsNone(withdrawal["deadline"])
-        self.assertIn("não há", withdrawal["reason"].lower())
+        self.assertIn("no delivery date is recorded", withdrawal["reason"].lower())
 
 
 if __name__ == "__main__":

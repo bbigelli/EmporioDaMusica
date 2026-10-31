@@ -3,12 +3,14 @@
 Four commands:
 
     python -m emporio.cli              interactive chat
+    python -m emporio.cli --lang pt    interactive chat, opening in Portuguese
     python -m emporio.cli ask "..."    one question, one answer
     python -m emporio.cli tools        inspect the data and policy layers
     python -m emporio.cli demo         run the scripted scenarios to examples/
 
-The interface chrome is in English, like the rest of the repository. What the
-agent says is a separate matter: it mirrors the customer's language.
+`--lang en|pt` sets the language the agent opens in; it still mirrors whatever
+the customer actually writes. The CLI's own labels stay in English, since they
+are developer surface — the Streamlit app has the full 🇧🇷 / 🇺🇸 switch.
 
 Tool calls are shown inline by default. For a customer-facing product they
 would be hidden, but the point of this prototype is to make the agent's
@@ -30,6 +32,7 @@ from rich.table import Table
 from rich.text import Text
 
 from emporio.config import ROOT, get_settings
+from emporio.i18n import DEFAULT_LANGUAGE, FLAGS
 
 app = typer.Typer(
     add_completion=False,
@@ -63,7 +66,16 @@ EXIT_WORDS = {"/exit", "/quit", "/sair", "exit", "quit", "sair"}
 RESET_WORDS = {"/reset", "/clear", "/limpar"}
 
 
-def _banner() -> None:
+def _validate_language(lang: str) -> str:
+    """Accept only the two supported codes, and say so rather than guessing."""
+    lang = lang.strip().lower()
+    if lang not in FLAGS:
+        console.print(f"\n  [red]unknown language {lang!r}[/red]; use en or pt\n")
+        raise typer.Exit(code=2)
+    return lang
+
+
+def _banner(language: str = DEFAULT_LANGUAGE) -> None:
     settings = get_settings()
     console.print()
     console.print(
@@ -83,7 +95,8 @@ def _banner() -> None:
         f"[dim]reference date[/dim] {settings.reference_date}",
     )
     console.print(
-        "  [dim]the agent replies in whichever language you write in[/dim]"
+        f"  [dim]opening in[/dim] {FLAGS[language]} "
+        "[dim]· the agent replies in whichever language you write in[/dim]"
     )
     console.print("  [dim]/reset to start over · /exit to quit[/dim]\n")
 
@@ -127,13 +140,19 @@ def _require_key() -> None:
 
 
 @app.command()
-def chat(quiet: bool = typer.Option(False, "--quiet", help="Hide tool calls.")) -> None:
+def chat(
+    quiet: bool = typer.Option(False, "--quiet", help="Hide tool calls."),
+    lang: str = typer.Option(
+        DEFAULT_LANGUAGE, "--lang", help="Opening language: en or pt."
+    ),
+) -> None:
     """Interactive conversation with the agent."""
     _require_key()
     from emporio.agent import Conversation
 
-    _banner()
-    conversation = Conversation()
+    lang = _validate_language(lang)
+    _banner(lang)
+    conversation = Conversation(language=lang)
 
     while True:
         try:
@@ -167,12 +186,15 @@ def chat(quiet: bool = typer.Option(False, "--quiet", help="Hide tool calls.")) 
 def ask(
     question: str = typer.Argument(..., help="The customer's question."),
     quiet: bool = typer.Option(False, "--quiet", help="Hide tool calls."),
+    lang: str = typer.Option(
+        DEFAULT_LANGUAGE, "--lang", help="Opening language: en or pt."
+    ),
 ) -> None:
     """Ask a single question and print the answer."""
     _require_key()
     from emporio.agent import Conversation
 
-    turn = Conversation().send(question)
+    turn = Conversation(language=_validate_language(lang)).send(question)
     _show_invocations(turn, quiet)
     _show_reply(turn)
 
@@ -238,7 +260,7 @@ def demo(
 def main(ctx: typer.Context) -> None:
     """Default to interactive chat when no command is given."""
     if ctx.invoked_subcommand is None:
-        chat(quiet=False)
+        chat(quiet=False, lang=DEFAULT_LANGUAGE)
 
 
 if __name__ == "__main__":

@@ -229,7 +229,13 @@ def main(argv: list[str] | None = None) -> int:
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--only", help="Run cases whose id contains this substring.")
-    parser.add_argument("--report", type=Path, default=DEFAULT_REPORT)
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help=f"Where to write the report. Defaults to {DEFAULT_REPORT.name} "
+        "for a full run, and is skipped for a filtered one.",
+    )
     parser.add_argument(
         "--fail-under",
         type=float,
@@ -264,9 +270,19 @@ def main(argv: list[str] | None = None) -> int:
     passed = sum(1 for r in results if r.passed)
     rate = passed / len(results)
 
-    args.report.write_text(render_report(results, elapsed), encoding="utf-8", newline="\n")
     print(f"\n  {passed}/{len(results)} passed ({rate:.0%}) in {elapsed:.0f}s")
-    print(f"  wrote {args.report.relative_to(ROOT)}")
+
+    # A filtered run must not overwrite the committed report: replacing a
+    # 25-case record with a 1-case one silently destroys the documented
+    # result. Pass --report explicitly to write one anyway.
+    report_path = args.report or (None if args.only else DEFAULT_REPORT)
+    if report_path is None:
+        print("  (filtered run — report not written; pass --report to force)")
+    else:
+        report_path.write_text(
+            render_report(results, elapsed), encoding="utf-8", newline="\n"
+        )
+        print(f"  wrote {report_path.relative_to(ROOT)}")
 
     return 1 if rate < args.fail_under else 0
 

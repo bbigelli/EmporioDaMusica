@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the floor the syntax here requires; 3.13 catches anything
+        # that depends on a version-specific behaviour.
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Rebuild the data artifacts from source
+        # The generated database and policy markdown are committed, so this
+        # does not need to run to use the project. It runs here to prove the
+        # pipelines still reproduce them from the raw CSVs and PDF — a
+        # committed artifact that no longer matches its source is exactly the
+        # silent failure the curated-table verification exists to prevent.
+        run: |
+          python scripts/build_data.py
+          python scripts/build_policies.py
+
+      - name: Check the committed artifacts are up to date
+        run: |
+          if ! git diff --quiet -- data/processed docs/data-quality-report.md; then
+            echo "::error::Regenerating the pipelines changed committed files."
+            git diff --stat -- data/processed docs/data-quality-report.md
+            exit 1
+          fi
+
+      - name: Run tests
+        # No API key and no network: the agent loop runs against a stub
+        # interactions client, so the whole suite is runnable by anyone.
+        run: python -m unittest discover -s tests -v
+
+  evals:
+    # The evaluation suite talks to the real Gemini API, so it only runs when
+    # a key is available — on pull requests from forks it would fail for a
+    # reason that has nothing to do with the change. Triggered by hand.
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run the evaluation suite
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python -m evals.run --fail-under 0.9
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report
+          path: evals/report.md

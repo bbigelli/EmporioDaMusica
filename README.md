@@ -1,5 +1,7 @@
 # Empório da Música — customer service agent
 
+[![CI](https://github.com/bbigelli/EmporioDaMusica/actions/workflows/ci.yml/badge.svg)](https://github.com/bbigelli/EmporioDaMusica/actions/workflows/ci.yml)
+
 A prototype text-messaging agent that answers customer questions for Empório da
 Música, a fictional musical instrument store in Campo Grande, MS, Brazil. It
 exists to take the recurring questions — prices, availability, order status,
@@ -65,7 +67,7 @@ and run the whole test suite:
 
 ```bash
 python -m emporio.cli tools --policy "posso devolver se me arrependi?"
-python -m unittest discover -s tests -v                 # 105 tests, no key, no network
+python -m unittest discover -s tests -v                 # 124 tests, no key, no network
 ```
 
 The generated data artifacts are committed, so neither pipeline needs to run.
@@ -208,11 +210,26 @@ date computes every window wrongly.
 The interactions API keeps history server-side; each turn passes the previous
 interaction's id and the service rebuilds context with the model's reasoning
 steps and their signatures intact. The alternative, `store=False`, means
-replaying every step by hand and getting signatures right.
+replaying every step by hand and getting the signatures right.
 
-A local transcript is kept alongside for the two things the server cannot give:
-a readable log for the examples, and resumability that does not depend on a
-retention window Google does not document.
+That is enough for the model and not enough for anyone else, so conversations
+are also written to SQLite ([`emporio/sessions.py`](emporio/sessions.py)):
+
+```bash
+python -m emporio.cli --resume last    # continue where you left off
+python -m emporio.cli sessions         # list recorded conversations
+python -m emporio.cli --ephemeral      # opt out
+```
+
+Three reasons the local copy exists. Retention of the server-side id is
+undocumented, so a resume feature built only on it works until it silently
+does not. An interaction id is not a transcript — a human reopening
+yesterday's thread wants to *read* it. And when a customer disputes what they
+were told, the record that matters is which tools ran with which arguments.
+
+When the server-side id has expired, the next turn starts a fresh server
+thread rather than failing: the model loses its memory of earlier turns, which
+is bad, but less bad than a conversation that cannot be continued at all.
 
 ### Data and PDF handling
 
@@ -319,12 +336,59 @@ context outweighed a single mention. It now appears second and again as a
 closing check, and states explicitly that Portuguese source material is not a
 signal about which language to reply in.
 
-## Testing
+## Testing and evaluation
 
-105 tests, no API key and no network required. The agent loop is driven by a
-stub interactions client, so its real decisions are covered: tool-failure
-handling, the six-round cap on runaway loops, retry and backoff behaviour, and
-conversation threading.
+Two layers, because they answer different questions.
+
+### Unit tests — does the machinery work?
+
+```bash
+python -m unittest discover -s tests -v    # 124 tests, no key, no network
+```
+
+The agent loop runs against a stub interactions client, so its real decisions
+are covered without a model: tool-failure handling, the six-round cap on
+runaway loops, retry and backoff, conversation threading, and persistence.
+
+### Evals — does the *agent* answer correctly?
+
+```bash
+python -m evals.run                        # 25 cases against the live API
+python -m evals.run --only pix --fail-under 0.9
+```
+
+Everything above can be verified without a model. Whether the agent gives the
+right answer cannot, and until this existed it was checked by reading five
+transcripts by hand — which does not scale past one prompt change and does not
+catch regressions. The language bug in example 5 survived exactly because
+nothing was watching for it.
+
+Each case in [`evals/cases.json`](evals/cases.json) asserts things that are
+true or false without judgement: substrings, regexes, which tools were called,
+reply length, and **grounding** — every `R$` amount in a reply must appear in a
+tool result from that same turn. There is no LLM-as-judge: a grader that can
+drift is worse than no grader, and a run has to be cheap enough to repeat. The
+cost is that tone is not graded. A judge pass would be a second layer, not a
+replacement.
+
+The suite earned its keep immediately by catching two bad assertions of my own.
+One banned any price when asked about a missing product, and failed a reply
+that correctly said the Roland Jupiter-8 is not stocked and offered a real
+alternative at its real price — which is what section 7.3 asks for. The other
+matched the literal `"não localiz"` and failed `"Não consegui localizar"`,
+testing the wording rather than the behaviour.
+
+Latest run: **25/25 in 184s**, recorded in [`evals/report.md`](evals/report.md).
+
+### CI
+
+GitHub Actions runs the unit tests on Python 3.11 and 3.13, and regenerates
+both pipelines to confirm the committed artifacts still match their sources —
+a generated file that has silently drifted from the CSVs or the PDF is the
+failure the curated-table verification exists to prevent. The eval suite needs
+an API key, so it runs on manual dispatch rather than on every push.
+
+### Regressions locked by tests
 
 Several tests exist specifically to lock defects that already happened:
 
@@ -360,8 +424,6 @@ own status in the same sentence.
   exponential backoff, then the error surfaces.
 - **No streaming.** Replies appear all at once. At a ~2s median that is
   tolerable; on a slower model it would not be.
-- **Single-session persistence.** History survives within a process via the
-  server-side interaction id, but nothing is persisted across restarts.
 
 ### With more time
 

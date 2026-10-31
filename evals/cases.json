@@ -1,0 +1,282 @@
+[
+  {
+    "id": "price-exact",
+    "question": "quanto custa o Takamine GD20?",
+    "why": "A plain price lookup. The figure must come from the catalog, not from the model.",
+    "must_call": [
+      "get_product_details"
+    ],
+    "must_contain": [
+      "2.199,00"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "pix-discount-applies",
+    "question": "quanto fica o Takamine GD20 no pix?",
+    "why": "5% off a non-promotional price, rounded commercially: 2199.00 -> 2089.05.",
+    "must_call": [
+      "get_product_details"
+    ],
+    "must_contain": [
+      "2.089,05"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "pix-does-not-stack",
+    "question": "o Crafter HT-100 está em promoção. no pix eu ganho os 5% também?",
+    "why": "Section 6.2: promotions are not cumulative. The plausible wrong answer is 1.868,82 and it undercharges the store.",
+    "must_contain": [
+      "1.967,18"
+    ],
+    "must_not_contain": [
+      "1.868",
+      "1.869"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "promotional-price-shows-original",
+    "question": "qual o preço do Crafter HT-100?",
+    "why": "Section 6.2 requires the original price and the discount percentage alongside a promotional one.",
+    "must_contain": [
+      "1.967,18",
+      "2.399,00",
+      "18"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "expired-promotion-not-honoured",
+    "question": "ainda vale aquele desconto de Black Friday no Taylor 110e?",
+    "why": "21 of 25 promotions are expired. Section 7.3 forbids promising a discount that is no longer in force; the Taylor's live promotion is 8%, not a Black Friday one.",
+    "must_not_contain": [
+      "Black Friday ainda",
+      "sim, o desconto de Black Friday"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "out-of-stock-not-sold",
+    "question": "o Giannini GF-3D Dreadnought Sunburst está disponível?",
+    "why": "Stock is zero. Section 7.3: say it is temporarily unavailable and suggest alternatives, never confirm availability.",
+    "must_contain_any": [
+      "indispon",
+      "sem estoque",
+      "esgotad",
+      "não temos"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "discontinued-product",
+    "question": "quero o Shelby SN-7C 7 Cordas Nylon Natural",
+    "why": "Discontinued with zero stock. Section 7.3 asks for successors, not a sale.",
+    "language": "pt",
+    "must_match_any": [
+      "descontinuad",
+      "nao\\s+(\\w+\\s+){0,3}(catalogo|linha)",
+      "fora\\s+de\\s+linha"
+    ]
+  },
+  {
+    "id": "accessories-out-of-scope",
+    "question": "vocês vendem cordas de nylon e palhetas?",
+    "why": "The store sells instruments only. Section 7.1 wants a warm redirect, not a catalog search.",
+    "language": "pt",
+    "must_match_any": [
+      "nao\\s+(\\w+\\s+){0,2}(trabalha|vende|comercializ)",
+      "(apenas|exclusivamente|somente)\\s+(\\w+\\s+){0,2}instrumentos"
+    ]
+  },
+  {
+    "id": "off-topic",
+    "question": "qual a previsão do tempo em Campo Grande amanhã?",
+    "why": "Nothing to do with the store. One light sentence, no tool call, no lecture.",
+    "must_not_call": [
+      "search_products",
+      "get_order_status"
+    ],
+    "max_chars": 420,
+    "language": "pt"
+  },
+  {
+    "id": "opening-hours",
+    "question": "qual o horário de funcionamento?",
+    "why": "A policy question, not a data one. The pdftotext extraction bug produced 'Segunda a Sexta -> Fechado'.",
+    "must_call": [
+      "search_store_policies"
+    ],
+    "must_contain": [
+      "09:00",
+      "18:00"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "sunday-closed",
+    "question": "vocês abrem no domingo?",
+    "why": "Same table, the row most likely to be lost in extraction.",
+    "must_contain_any": [
+      "fechad",
+      "não abrimos",
+      "não funcionamos"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "store-address",
+    "question": "qual o endereço da loja?",
+    "why": "General store information, from the policy manual.",
+    "must_contain_any": [
+      "14 de Maio",
+      "Rua 14"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "free-shipping-threshold",
+    "question": "a partir de quanto o frete é grátis aqui em Campo Grande?",
+    "why": "Section 5.1: free above BRL 500 in the metropolitan region.",
+    "must_contain": [
+      "500"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "shipping-outside-region-invents-nothing",
+    "question": "quanto custa o frete de um violão para Belo Horizonte?",
+    "why": "The fee depends on postcode, weight and dimensions, none of which are in the data. Quoting a number here is the 'propaganda enganosa' section 7.1 warns about.",
+    "must_contain_any": [
+      "CEP",
+      "depende",
+      "peso",
+      "dimens",
+      "cotação"
+    ],
+    "forbid_invented_prices": true,
+    "language": "pt"
+  },
+  {
+    "id": "order-status-delivered",
+    "question": "qual o status do pedido 7?",
+    "why": "A delivered order with a real tracking code.",
+    "must_call": [
+      "get_order_status"
+    ],
+    "must_contain_any": [
+      "entregue",
+      "BRKR1122334BR"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "undispatched-order-has-no-tracking",
+    "question": "me passa o código de rastreio do pedido 13",
+    "why": "12 of 20 orders have no tracking because they have not shipped. The model must not invent one.",
+    "must_call": [
+      "get_order_status"
+    ],
+    "must_not_match": [
+      "BR[A-Z0-9]{9}BR"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "unknown-order-not-invented",
+    "question": "e o pedido 9999, já chegou?",
+    "why": "The order does not exist. Inventing a status is the worst available failure.",
+    "language": "pt",
+    "must_match_any": [
+      "nao\\s+(\\w+\\s+){0,2}(encontr|localiz|consegu|achei|ach)",
+      "nao\\s+(\\w+\\s+){0,2}consta",
+      "(confer|confirm|verific)\\w*\\s+o\\s+n[uú]mero"
+    ]
+  },
+  {
+    "id": "unknown-product-not-invented",
+    "question": "qual o preço do Roland Jupiter-8?",
+    "why": "Absent from the catalog, so no price for it may be invented — but section 7.3 does want a real alternative offered, and that alternative legitimately has a price. The assertion is therefore grounding, not a blanket ban on currency: every amount quoted must have come from a tool result.",
+    "must_contain_any": [
+      "não faz parte",
+      "não trabalhamos",
+      "não temos",
+      "não encontr"
+    ],
+    "forbid_invented_prices": true,
+    "language": "pt"
+  },
+  {
+    "id": "ambiguous-name-asks-back",
+    "question": "quanto custa o Takamine?",
+    "why": "Four Takamine models exist. Picking one silently quotes the price of a different instrument.",
+    "must_contain_any": [
+      "qual",
+      "quatro",
+      "modelos",
+      "temos estes",
+      "which"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "return-expired-but-warranty-open",
+    "question": "comprei no pedido 7 e me arrependi, consigo devolver?",
+    "why": "The non-trivial case: every exchange window is closed but the 90-day legal warranty runs to 2026-05-18. A flat no is wrong.",
+    "must_call": [
+      "check_return_eligibility"
+    ],
+    "must_contain_any": [
+      "garantia"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "instalments",
+    "question": "em quantas vezes posso parcelar o Takamine GD20?",
+    "why": "2199 / 12 = 183.25, above the BRL 100 floor for the 7-12x tier.",
+    "must_contain": [
+      "12"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "catalog-under-budget",
+    "question": "quais violões vocês têm disponíveis até R$ 1000?",
+    "why": "The headline query. Two of the fourteen matches are unavailable and must not be offered as buyable.",
+    "must_call": [
+      "search_products"
+    ],
+    "must_not_contain": [
+      "Shelby SN-7C",
+      "Giannini GF-3D"
+    ],
+    "language": "pt"
+  },
+  {
+    "id": "english-is-answered-in-english",
+    "question": "Hi! How much is the Taylor 110e?",
+    "why": "The agent mirrors the customer's language. This failed on the first full run, answering in Portuguese across three turns.",
+    "must_contain": [
+      "5.519,08"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "english-policy-question",
+    "question": "What is your return policy for online purchases?",
+    "why": "English question against a Portuguese policy manual: retrieval in one language, answer in another.",
+    "must_contain": [
+      "7"
+    ],
+    "language": "en"
+  },
+  {
+    "id": "english-shipping-no-invented-fee",
+    "question": "Do you ship to São Paulo and how much is it?",
+    "why": "Same no-invented-fee rule, in English, where the model has more room to paraphrase its way into a number.",
+    "forbid_invented_prices": true,
+    "language": "en"
+  }
+]

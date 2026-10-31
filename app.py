@@ -60,14 +60,19 @@ def language_selector() -> Language:
                 f"{FLAG_SVG[language]}</div>",
                 unsafe_allow_html=True,
             )
+            # The active language is highlighted but stays enabled. Disabling
+            # it greys it out, and a greyed-out button reads as "unavailable"
+            # rather than "current" — it made the *inactive* language look
+            # like the selected one.
             selected = language == current
             if st.button(
                 NAMES[language],
                 key=f"lang_{language}",
                 use_container_width=True,
                 type="primary" if selected else "secondary",
-                disabled=selected,
             ):
+                if selected:
+                    return current
                 st.session_state.language = language
                 st.session_state.pop("conversation", None)
                 st.session_state.pop("messages", None)

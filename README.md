@@ -17,6 +17,25 @@ non-trivial cases: a promotional price that must *not* stack with the PIX
 discount, and a return request where every exchange window has expired but the
 legal warranty has not.
 
+## What it looks like
+
+A catalog query with a price ceiling. The agent filtered to what is actually
+purchasable — two further matches are out of stock or discontinued and are
+deliberately not offered as buyable.
+
+![Catalog query in Portuguese](docs/images/chat-portuguese.jpg)
+
+The same agent, in English, on the harder case: order 7 is past every exchange
+deadline but still inside the legal warranty.
+
+![Return request in English](docs/images/chat-english.jpg)
+
+Every reply exposes the tool calls behind it. Expanding one shows the raw
+result the model worked from — here the deadline arithmetic the agent is not
+allowed to do itself.
+
+![Expanded tool call showing the raw result](docs/images/tool-call-expanded.jpg)
+
 ## Quick start
 
 ```bash

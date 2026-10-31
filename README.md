@@ -16,8 +16,8 @@ Work in progress.
 
 - [x] Data pipeline: CSV → SQLite, with a data quality report
 - [x] Policy pipeline: PDF → curated markdown and retrieval units
-- [ ] Deterministic business rules
-- [ ] Agent tools
+- [x] Deterministic business rules
+- [x] Agent tools
 - [ ] Agent loop and persona
 - [ ] CLI
 - [ ] Interaction examples
@@ -31,7 +31,7 @@ pip install -r requirements.txt
 python scripts/build_data.py       # -> data/processed/store.db
 python scripts/build_policies.py   # -> data/processed/store_policies.md + policy_sections.json
 
-python -m unittest discover -s tests -v
+python -m unittest discover -s tests -v   # 62 tests
 ```
 
 Generated artifacts are committed, so the agent runs without re-running either

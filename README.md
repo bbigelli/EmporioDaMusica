@@ -127,7 +127,23 @@ rule it can forget:
 unanticipated questions, but it does so by letting the model author the query
 that produces a price or a stock figure, and an invented `JOIN` is a
 plausible-looking way to check the system wrongly. The seven tools have closed
-signatures over the store's own concepts.
+signatures over the store's own concepts:
+
+| Tool | Source | Answers |
+| --- | --- | --- |
+| `search_products` | catalog | "which acoustic guitars under R$ 1000?" |
+| `get_product_details` | catalog | "how much is the Takamine GD20, and how can I pay?" |
+| `get_active_promotions` | catalog | "is anything on sale?" |
+| `get_order_status` | orders | "where is order 7?" |
+| `check_return_eligibility` | orders + rules | "can I still send it back?" |
+| `quote_shipping` | rules | "what does delivery to São Paulo cost?" |
+| `search_store_policies` | policy manual | "what are your opening hours?" |
+
+Deciding between them is the agent's actual job, and it is the thing the
+transcripts are there to show: the first six read operational data, the last
+reads the manual, and some questions need both. "Does the PIX discount stack
+with this promotion?" takes `get_product_details` *and* `get_active_promotions`
+— that exchange is [example 2](examples/02-promotional-price-and-pix.md).
 
 **Policy manual → BM25 over 25 sections.** The manual is eight pages, about
 12,000 characters. At that size a vector store adds a dependency, a build step

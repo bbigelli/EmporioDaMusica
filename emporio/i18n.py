@@ -27,8 +27,43 @@ NAMES: dict[Language, str] = {"pt": "Português", "en": "English"}
 
 
 def option_label(language: Language) -> str:
-    """'🇧🇷 Português' — what the selector shows."""
+    """'🇧🇷 Português' — used where only text can be rendered, like the CLI."""
     return f"{FLAGS[language]} {NAMES[language]}"
+
+
+# Inline SVG flags for the web interface.
+#
+# Flag emoji are regional indicator pairs, and Windows has no glyph for them:
+# Segoe UI Emoji falls back to drawing the two letters, so 🇧🇷 renders as a
+# small "BR". That is fine in a terminal and wrong in a product, so the web UI
+# draws the flags itself. Inline SVG also means no network fetch and no image
+# files to ship.
+#
+# These are simplified: the US canton has no stars and the Brazilian globe has
+# no banner. At 28x20 neither would be legible anyway.
+_US_STRIPES = "".join(
+    f'<rect y="{i * 20 / 13:.3f}" width="28" height="{20 / 13:.3f}" fill="#b22234"/>'
+    for i in range(0, 13, 2)
+)
+
+FLAG_SVG: dict[Language, str] = {
+    "pt": (
+        '<svg width="28" height="20" viewBox="0 0 28 20" role="img" '
+        'aria-label="Bandeira do Brasil">'
+        '<rect width="28" height="20" fill="#009b3a"/>'
+        '<polygon points="14,2.2 25.6,10 14,17.8 2.4,10" fill="#fedf00"/>'
+        '<circle cx="14" cy="10" r="4.3" fill="#002776"/>'
+        "</svg>"
+    ),
+    "en": (
+        '<svg width="28" height="20" viewBox="0 0 28 20" role="img" '
+        'aria-label="Flag of the United States">'
+        '<rect width="28" height="20" fill="#ffffff"/>'
+        f"{_US_STRIPES}"
+        '<rect width="11.9" height="10.77" fill="#3c3b6e"/>'
+        "</svg>"
+    ),
+}
 
 
 STRINGS: dict[str, dict[Language, str]] = {

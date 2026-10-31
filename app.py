@@ -19,7 +19,7 @@ import json
 import streamlit as st
 
 from emporio.config import get_settings
-from emporio.i18n import DEFAULT_LANGUAGE, Language, option_label, t
+from emporio.i18n import DEFAULT_LANGUAGE, FLAG_SVG, NAMES, Language, t
 
 LANGUAGE_OPTIONS: list[Language] = ["en", "pt"]
 
@@ -39,30 +39,42 @@ def md(text: str) -> str:
 
 
 def language_selector() -> Language:
-    """The 🇧🇷 / 🇺🇸 switch. Changing it restarts the conversation.
+    """The flag switch. Changing it restarts the conversation.
 
     The selected language is baked into the agent's system instruction, so an
     in-flight conversation cannot adopt it retroactively — clearing the thread
     is more honest than leaving the greeting in one language and the rest in
     another.
-    """
-    previous = st.session_state.get("language", DEFAULT_LANGUAGE)
-    chosen = st.radio(
-        t("language", previous),
-        options=LANGUAGE_OPTIONS,
-        format_func=option_label,
-        index=LANGUAGE_OPTIONS.index(previous),
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    if chosen != previous:
-        st.session_state.language = chosen
-        st.session_state.pop("conversation", None)
-        st.session_state.pop("messages", None)
-        st.rerun()
 
-    st.session_state.language = chosen
-    return chosen
+    Drawn as two buttons rather than a radio because a radio can only label
+    itself with text, and flag emoji render as bare letters on Windows. The
+    SVG is a constant in this repository, not user input, so allowing HTML
+    here introduces nothing to inject.
+    """
+    current: Language = st.session_state.get("language", DEFAULT_LANGUAGE)
+
+    for column, language in zip(st.columns(len(LANGUAGE_OPTIONS)), LANGUAGE_OPTIONS):
+        with column:
+            st.markdown(
+                f"<div style='text-align:center;line-height:1;margin-bottom:0.25rem'>"
+                f"{FLAG_SVG[language]}</div>",
+                unsafe_allow_html=True,
+            )
+            selected = language == current
+            if st.button(
+                NAMES[language],
+                key=f"lang_{language}",
+                use_container_width=True,
+                type="primary" if selected else "secondary",
+                disabled=selected,
+            ):
+                st.session_state.language = language
+                st.session_state.pop("conversation", None)
+                st.session_state.pop("messages", None)
+                st.rerun()
+
+    st.session_state.language = current
+    return current
 
 
 def sidebar() -> tuple[Language, bool]:

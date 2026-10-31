@@ -50,6 +50,22 @@ class StringTableTests(unittest.TestCase):
         self.assertEqual("🇧🇷 Português", i18n.option_label("pt"))
         self.assertEqual("🇺🇸 English", i18n.option_label("en"))
 
+    def test_flag_svgs_are_well_formed_and_self_contained(self) -> None:
+        """The web UI draws flags itself because Windows renders flag emoji as
+        bare letters ("BR"). Inline SVG also means no network fetch, so a
+        remote reference here would reintroduce the dependency it avoids."""
+        import xml.etree.ElementTree as ET
+
+        self.assertEqual({"pt", "en"}, set(i18n.FLAG_SVG))
+        for language, svg in i18n.FLAG_SVG.items():
+            ET.fromstring(svg)  # raises if malformed
+            self.assertIn("viewBox", svg, language)
+            self.assertIn("aria-label", svg, language)
+            self.assertNotIn("http", svg, f"{language} flag reaches out to the network")
+
+    def test_us_flag_has_thirteen_stripes(self) -> None:
+        self.assertEqual(7, i18n.FLAG_SVG["en"].count('fill="#b22234"'))
+
     def test_lookup_rejects_an_unknown_key(self) -> None:
         with self.assertRaises(KeyError):
             i18n.t("no_such_key", "en")

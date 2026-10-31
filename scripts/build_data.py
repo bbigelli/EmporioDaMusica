@@ -430,7 +430,7 @@ def write_report(findings: QualityFindings, spec_coverage: dict[str, int]) -> Pa
         "`status` alone does not answer \"can the customer buy this today?\" — a product",
         "can be `active` with zero stock, or `discontinued` while stock remains. The",
         "`product_pricing` view therefore derives an `availability` field, because",
-        "sections 7.3 of the policy manual prescribes a *different* response for each",
+        "section 7.3 of the policy manual prescribes a *different* response for each",
         "case: suggest alternatives when out of stock, offer successors when",
         "discontinued.",
         "",

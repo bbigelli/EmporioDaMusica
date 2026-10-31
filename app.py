@@ -25,6 +25,16 @@ GREETING = (
 )
 
 
+def md(text: str) -> str:
+    """Escape dollar signs before handing text to st.markdown.
+
+    Streamlit renders `$...$` as LaTeX. Every reply here is full of prices, so
+    "R$ 1.967,18 (de R$ 2.399,00)" has its middle swallowed into a maths span
+    and the currency symbols vanish. Escaping is the documented way out.
+    """
+    return text.replace("$", r"\$")
+
+
 def sidebar() -> bool:
     """Render the sidebar. Returns whether the agent can run."""
     settings = get_settings()
@@ -79,7 +89,7 @@ def main() -> None:
 
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
-            st.markdown(message["content"])
+            st.markdown(md(message["content"]))
             if message["role"] == "assistant" and message.get("invocations") is not None:
                 if message["invocations"]:
                     render_invocations(message["invocations"])
@@ -94,7 +104,7 @@ def main() -> None:
 
     st.session_state.messages.append({"role": "user", "content": prompt, "invocations": []})
     with st.chat_message("user"):
-        st.markdown(prompt)
+        st.markdown(md(prompt))
 
     if "conversation" not in st.session_state:
         from emporio.agent import Conversation
@@ -108,7 +118,7 @@ def main() -> None:
             except Exception as exc:  # noqa: BLE001 - shown to the user, not raised
                 st.error(f"Não consegui concluir a consulta: {exc}")
                 return
-        st.markdown(turn.reply)
+        st.markdown(md(turn.reply))
         render_invocations(turn.invocations)
 
     st.session_state.messages.append(

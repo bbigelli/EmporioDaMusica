@@ -18,9 +18,10 @@ Work in progress.
 - [x] Policy pipeline: PDF → curated markdown and retrieval units
 - [x] Deterministic business rules
 - [x] Agent tools
-- [ ] Agent loop and persona
-- [ ] CLI
-- [ ] Interaction examples
+- [x] Agent loop and persona
+- [x] CLI and Streamlit interface
+- [ ] Interaction examples (scripted; needs an API key to generate)
+- [ ] Final README: model choice, limitations, assistant workflow
 
 ## Running the pipelines
 
@@ -31,7 +32,28 @@ pip install -r requirements.txt
 python scripts/build_data.py       # -> data/processed/store.db
 python scripts/build_policies.py   # -> data/processed/store_policies.md + policy_sections.json
 
-python -m unittest discover -s tests -v   # 62 tests
+python -m unittest discover -s tests -v   # 85 tests, no API key needed
+```
+
+## Running the agent
+
+Set up a key first — see `.env.example`:
+
+```bash
+cp .env.example .env     # then fill in GEMINI_API_KEY
+```
+
+```bash
+python -m emporio.cli                      # interactive chat
+python -m emporio.cli ask "quanto custa o Takamine GD20?"
+python -m emporio.cli demo                 # regenerate examples/
+streamlit run app.py                       # web chat
+```
+
+The data and policy layers can be inspected with no key at all:
+
+```bash
+python -m emporio.cli tools --policy "posso devolver se me arrependi?"
 ```
 
 Generated artifacts are committed, so the agent runs without re-running either

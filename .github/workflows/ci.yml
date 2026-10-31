@@ -29,21 +29,40 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Snapshot the committed database as SQL
+        # Compared as a logical dump, not as bytes. An SQLite file is not
+        # reproducible byte-for-byte — the header carries a change counter and
+        # page layout depends on write order — so `git diff` on the .db
+        # reports a difference on every rebuild even when every row is
+        # identical. The dump compares what the database actually contains.
+        run: python -c "import sqlite3,pathlib; pathlib.Path('/tmp/before.sql').write_text('\n'.join(sqlite3.connect('data/processed/store.db').iterdump()), encoding='utf-8')"
+
       - name: Rebuild the data artifacts from source
-        # The generated database and policy markdown are committed, so this
-        # does not need to run to use the project. It runs here to prove the
-        # pipelines still reproduce them from the raw CSVs and PDF — a
-        # committed artifact that no longer matches its source is exactly the
-        # silent failure the curated-table verification exists to prevent.
+        # The generated artifacts are committed, so this does not need to run
+        # to use the project. It runs here to prove the pipelines still
+        # reproduce them from the raw CSVs and PDF — an artifact that has
+        # silently drifted from its source is exactly the failure the
+        # curated-table verification exists to prevent.
         run: |
           python scripts/build_data.py
           python scripts/build_policies.py
 
-      - name: Check the committed artifacts are up to date
+      - name: Check the database still matches its sources
         run: |
-          if ! git diff --quiet -- data/processed docs/data-quality-report.md; then
-            echo "::error::Regenerating the pipelines changed committed files."
-            git diff --stat -- data/processed docs/data-quality-report.md
+          python -c "import sqlite3,pathlib; pathlib.Path('/tmp/after.sql').write_text('\n'.join(sqlite3.connect('data/processed/store.db').iterdump()), encoding='utf-8')"
+          if ! diff -q /tmp/before.sql /tmp/after.sql > /dev/null; then
+            echo "::error::Rebuilding produced a different database than the committed one."
+            diff /tmp/before.sql /tmp/after.sql | head -40
+            exit 1
+          fi
+
+      - name: Check the generated text artifacts are up to date
+        # These are plain text and genuinely byte-stable, so a literal diff is
+        # the right check for them.
+        run: |
+          if ! git diff --quiet -- data/processed/store_policies.md data/processed/policy_sections.json docs/data-quality-report.md; then
+            echo "::error::Regenerating the pipelines changed a committed file."
+            git diff -- data/processed/store_policies.md data/processed/policy_sections.json docs/data-quality-report.md | head -60
             exit 1
           fi
 

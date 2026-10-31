@@ -282,6 +282,103 @@ class ToolFailureTests(unittest.TestCase):
         self.assertEqual("unknown_tool", turn.invocations[0].result["status"])
 
 
+class ApiError(Exception):
+    """Stands in for an SDK error carrying an HTTP status."""
+
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+class FlakyInteractions(StubInteractions):
+    """Raises a scripted sequence of errors before each successful response."""
+
+    def __init__(self, errors: list[Exception], scripted: list[StubInteraction]) -> None:
+        super().__init__(scripted)
+        self.errors = errors
+        self.attempts = 0
+
+    def create(self, **kwargs):
+        self.attempts += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return super().create(**kwargs)
+
+
+class RetryTests(unittest.TestCase):
+    """The free tier returns 503 'experiencing high demand' under load, and it
+    clears on its own. Retrying turns a dead conversation into a slow one."""
+
+    def setUp(self) -> None:
+        from emporio import agent
+
+        self.agent = agent
+        self.slept: list[float] = []
+        self._sleep = agent.time.sleep
+        agent.time.sleep = self.slept.append
+
+    def tearDown(self) -> None:
+        self.agent.time.sleep = self._sleep
+
+    def _conversation(self, errors, scripted):
+        client = StubClient([])
+        client.interactions = FlakyInteractions(errors, scripted)
+        return self.agent.Conversation(client=client), client
+
+    def test_overloaded_service_is_retried(self) -> None:
+        convo, client = self._conversation(
+            [ApiError(503), ApiError(503)], [StubInteraction(id="i1", output_text="pronto")]
+        )
+        with self.assertLogs(self.agent.logger, level="WARNING"):
+            turn = convo.send("oi")
+        self.assertEqual("pronto", turn.reply)
+        self.assertEqual(3, client.interactions.attempts)
+        self.assertEqual([2.0, 4.0], self.slept)  # exponential backoff
+
+    def test_rate_limit_and_gateway_errors_are_retried(self) -> None:
+        for status in (429, 500, 502, 504):
+            convo, client = self._conversation(
+                [ApiError(status)], [StubInteraction(id="i1", output_text="ok")]
+            )
+            with self.assertLogs(self.agent.logger, level="WARNING"):
+                convo.send("oi")
+            self.assertEqual(2, client.interactions.attempts, f"status {status}")
+
+    def test_client_errors_are_not_retried(self) -> None:
+        """A bad key or a malformed request will fail identically every time;
+        retrying only makes the customer wait longer for the same failure."""
+        for status in (400, 401, 403, 404):
+            convo, client = self._conversation([ApiError(status)], [])
+            with self.assertRaises(ApiError):
+                convo.send("oi")
+            self.assertEqual(1, client.interactions.attempts, f"status {status}")
+
+    def test_timeouts_are_retried_without_a_status_code(self) -> None:
+        class APITimeoutError(Exception):
+            pass
+
+        convo, client = self._conversation(
+            [APITimeoutError("timed out")], [StubInteraction(id="i1", output_text="ok")]
+        )
+        with self.assertLogs(self.agent.logger, level="WARNING"):
+            convo.send("oi")
+        self.assertEqual(2, client.interactions.attempts)
+
+    def test_persistent_failure_eventually_raises(self) -> None:
+        errors = [ApiError(503) for _ in range(self.agent.MAX_REQUEST_ATTEMPTS)]
+        convo, client = self._conversation(errors, [])
+        with self.assertLogs(self.agent.logger, level="WARNING"), self.assertRaises(ApiError):
+            convo.send("oi")
+        self.assertEqual(self.agent.MAX_REQUEST_ATTEMPTS, client.interactions.attempts)
+
+    def test_requests_are_bounded_by_a_timeout(self) -> None:
+        convo, client = self._conversation([], [StubInteraction(id="i1", output_text="ok")])
+        convo.send("oi")
+        self.assertEqual(
+            self.agent.REQUEST_TIMEOUT_SECONDS, client.interactions.requests[0]["timeout"]
+        )
+
+
 class ConversationStateTests(unittest.TestCase):
     def test_multi_turn_chains_through_the_server(self) -> None:
         convo, client = conversation(
@@ -329,7 +426,22 @@ class SystemInstructionTests(unittest.TestCase):
     def test_instruction_specifies_language_mirroring(self) -> None:
         from emporio.prompts import build_system_instruction
 
-        self.assertIn("Reply in the language the customer wrote in", build_system_instruction())
+        self.assertIn(
+            "Match the language of the customer's most recent message",
+            build_system_instruction(),
+        )
+
+    def test_language_rule_appears_early_and_last(self) -> None:
+        """Measured: with the rule buried mid-prompt, the model answered an
+        English-speaking customer in Portuguese for all three turns of
+        scenario 05. The surrounding Portuguese context outweighed a single
+        mention, so the rule is placed for both primacy and recency."""
+        from emporio.prompts import build_system_instruction
+
+        instruction = build_system_instruction()
+        blocks = instruction.split("\n\n---\n\n")
+        self.assertIn("# Language", blocks[1])
+        self.assertIn("same language as the", blocks[-1])
 
 
 class ScenarioTests(unittest.TestCase):

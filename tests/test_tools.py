@@ -26,8 +26,25 @@ class MoneyTests(unittest.TestCase):
         self.assertEqual("R$ 1.967,18", brl(1967.18))
         self.assertEqual("R$ 429,90", brl(429.9))
         self.assertEqual("R$ 12.345,67", brl(12345.67))
+        self.assertEqual("R$ 1.234.567,89", brl(1234567.89))
         self.assertEqual("R$ 0,00", brl(0.0))
         self.assertIsNone(brl(None))
+
+    def test_money_rounds_half_up_not_to_even(self) -> None:
+        """A 5% PIX discount on R$ 699,90 is 664.905. Python's round() gives
+        664.90; every Brazilian till gives 664.91."""
+        from emporio.money import round_brl
+
+        self.assertEqual(664.91, round_brl(664.905))
+        self.assertEqual(0.01, round_brl(0.005))
+        self.assertEqual(2.68, round_brl(2.675))
+        self.assertEqual(459.92, round_brl(459.9233))
+
+    def test_pix_discount_uses_commercial_rounding(self) -> None:
+        from emporio import tools
+
+        product = tools.get_product_details(name="Yamaha F310")["product"]
+        self.assertEqual("R$ 664,91", product["payment"]["pix_total_display"])
 
 
 class CatalogToolTests(unittest.TestCase):

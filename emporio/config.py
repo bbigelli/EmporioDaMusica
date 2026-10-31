@@ -17,7 +17,18 @@ ROOT = Path(__file__).resolve().parent.parent
 # all of them and the returns policy can never be exercised. See the README.
 DEFAULT_REFERENCE_DATE = date(2026, 3, 25)
 
-DEFAULT_MODEL = "gemini-3.8-flash"
+# Measured on the free tier on 2026-10-31: gemini-3.8-flash is the model
+# Google documents for agentic tool use, but it was returning 503
+# "experiencing high demand" and took 139.6s to answer a one-word prompt.
+# gemini-3.5-flash-lite answered the same prompt with a median of 1.7s over
+# three calls and drives this agent's tools correctly, including the
+# non-cumulative discount case. Latency that bad is a correctness problem for
+# a service channel the manual holds to a five-minute response time.
+DEFAULT_MODEL = "gemini-3.5-flash-lite"
+
+# Requests are bounded: the SDK's default allows a request to hang far longer
+# than anyone waiting on a chat reply will tolerate.
+REQUEST_TIMEOUT_SECONDS = 90.0
 
 
 @dataclass(frozen=True)

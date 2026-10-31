@@ -28,7 +28,7 @@ from datetime import date, timedelta
 from typing import Literal
 
 from emporio.config import get_settings
-from emporio.money import brl
+from emporio.money import brl, round_brl
 
 # --- Payment -------------------------------------------------------------
 # Section 3: PIX pays in full with a 5% discount off the list price.
@@ -116,7 +116,7 @@ def instalment_plans(total: float) -> list[dict[str, object]]:
     plans: list[dict[str, object]] = []
     for count in range(1, MAX_INSTALMENTS + 1):
         minimum = next(floor for cap, floor in INSTALMENT_TIERS if count <= cap)
-        amount = round(total / count, 2)
+        amount = round_brl(total / count)
         if count == 1 or amount >= minimum:
             plans.append(
                 {
@@ -145,9 +145,9 @@ def quote_payment(
 
     pix_discount_applies = not on_promotion
     pix_total = (
-        round(effective * (1 - PIX_DISCOUNT_PERCENT / 100), 2)
+        round_brl(effective * (1 - PIX_DISCOUNT_PERCENT / 100))
         if pix_discount_applies
-        else round(effective, 2)
+        else round_brl(effective)
     )
 
     plans = instalment_plans(effective)
@@ -165,12 +165,12 @@ def quote_payment(
         ),
         PaymentOption(
             method="Cartão de débito",
-            total_brl=round(effective, 2),
+            total_brl=round_brl(effective),
             detail="à vista, todas as bandeiras",
         ),
         PaymentOption(
             method="Boleto bancário",
-            total_brl=round(effective, 2),
+            total_brl=round_brl(effective),
             detail="à vista, compensação em até 3 dias úteis",
         ),
     ]
@@ -179,7 +179,7 @@ def quote_payment(
         options.append(
             PaymentOption(
                 method="Cartão de crédito",
-                total_brl=round(effective, 2),
+                total_brl=round_brl(effective),
                 detail=(
                     f"até {best['instalments']}x sem juros de "
                     f"{brl(float(best['instalment_brl']))}"
@@ -201,8 +201,8 @@ def quote_payment(
         )
 
     return PaymentQuote(
-        list_price_brl=round(list_price_brl, 2),
-        effective_price_brl=round(effective, 2),
+        list_price_brl=round_brl(list_price_brl),
+        effective_price_brl=round_brl(effective),
         on_promotion=on_promotion,
         discount_percent=discount_percent,
         pix_total_brl=pix_total,

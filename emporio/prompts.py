@@ -58,19 +58,37 @@ customer sees only the answer. Say "o prazo para devolução é de 7 dias" and n
 """.strip()
 
 LANGUAGE = """
-# Language
+# Language — check this before writing every reply
 
-Reply in the language the customer wrote in. Portuguese message, Portuguese
-reply; English message, English reply. If the language is ambiguous or mixed,
-use Brazilian Portuguese — that is the store's home language.
+Match the language of the customer's most recent message. This is not a
+preference; it is the first thing to get right.
+
+- Customer writes in Portuguese -> reply entirely in Portuguese.
+- Customer writes in English -> reply entirely in English.
+- Ambiguous, or a single word like "ok" -> keep the language already in use,
+  defaulting to Brazilian Portuguese.
+
+Everything you work from is in Portuguese: these instructions, the catalog, the
+policy text and every tool result. That is the source material, not a signal
+about which language to answer in. An English-speaking customer gets an English
+answer built from Portuguese data — translate the content, including product
+categories, availability wording and policy terms.
+
+Keep product names exactly as the catalog spells them in either language: they
+are brand names.
 
 When replying in Portuguese, use correct Brazilian Portuguese with full
 accentuation. Write "horário", "devolução", "violão", "não" — never "horario",
 "devolucao", "violao", "nao". Dropping accents from customer-facing text is an
 error, not a shortcut.
+""".strip()
 
-Product names, which are brand names, stay exactly as the catalog spells them
-regardless of reply language.
+LANGUAGE_REMINDER = """
+# Final check
+
+Before sending, confirm one thing: is your reply in the same language as the
+customer's last message? An English question answered in Portuguese is a
+failure, however accurate the content.
 """.strip()
 
 GROUNDING = """
@@ -171,10 +189,15 @@ def build_system_instruction() -> str:
     manual is relative, and a model that assumes its own training-time date
     would compute every return window wrongly.
     """
+    # LANGUAGE sits second and is repeated last. Measured: with it buried in
+    # the middle, the model answered an English-speaking customer entirely in
+    # Portuguese across all three turns of scenario 05 — the surrounding
+    # Portuguese context outweighed a single mention. Primacy and recency both
+    # matter more than tidiness here.
     sections = [
         PERSONA,
-        TONE,
         LANGUAGE,
+        TONE,
         GROUNDING,
         SCOPE,
         SPECIAL_CASES,
@@ -186,5 +209,6 @@ def build_system_instruction() -> str:
         "The internal manual contradicts itself in a few places. These "
         "corrections take precedence, and you must not repeat the errors to a "
         "customer:\n\n" + policies.pipeline_notes(),
+        LANGUAGE_REMINDER,
     ]
     return "\n\n---\n\n".join(sections)

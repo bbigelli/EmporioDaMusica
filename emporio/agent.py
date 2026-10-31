@@ -23,16 +23,37 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from google import genai
 
 from emporio import tools
-from emporio.config import get_settings
+from emporio.config import REQUEST_TIMEOUT_SECONDS, get_settings
 from emporio.prompts import build_system_instruction
 
 logger = logging.getLogger(__name__)
+
+# The free tier returns 503 under load and it clears on its own.
+MAX_REQUEST_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 2.0
+
+# HTTP statuses worth another try: overloaded, rate limited, gateway hiccups.
+TRANSIENT_STATUS_CODES = frozenset({429, 500, 502, 503, 504})
+
+
+def _is_transient(error: Exception) -> bool:
+    """Whether a failure is worth retrying.
+
+    Checks the structured status code first and only falls back to the message
+    when the exception does not carry one — string matching on error text is
+    brittle, but a timeout class name is a reliable enough last resort.
+    """
+    status = getattr(error, "status_code", None)
+    if isinstance(status, int):
+        return status in TRANSIENT_STATUS_CODES
+    return "Timeout" in type(error).__name__
 
 # A turn that still wants tools after this many rounds is looping. Six is well
 # clear of the deepest legitimate chain observed (order -> product -> policy)
@@ -75,6 +96,7 @@ class Conversation:
     system_instruction: str = field(default_factory=build_system_instruction)
     previous_interaction_id: str | None = None
     transcript: list[Turn] = field(default_factory=list)
+    timeout: float = REQUEST_TIMEOUT_SECONDS
 
     def __post_init__(self) -> None:
         if self.client is None:
@@ -84,14 +106,40 @@ class Conversation:
     # -- internals --------------------------------------------------------
 
     def _create(self, payload: Any) -> Any:
+        """Send one request, retrying the transient failures.
+
+        The free tier returns 503 "experiencing high demand" under load, which
+        clears on its own. Retrying with backoff turns a dead conversation into
+        a slow one. Everything else — a bad key, a malformed request — is
+        raised immediately, because retrying it only wastes the customer's
+        time.
+        """
         settings = get_settings()
-        return self.client.interactions.create(
-            model=settings.model,
-            input=payload,
-            tools=tools.DECLARATIONS,
-            system_instruction=self.system_instruction,
-            previous_interaction_id=self.previous_interaction_id,
-        )
+        last_error: Exception | None = None
+
+        for attempt in range(MAX_REQUEST_ATTEMPTS):
+            try:
+                return self.client.interactions.create(
+                    model=settings.model,
+                    input=payload,
+                    tools=tools.DECLARATIONS,
+                    system_instruction=self.system_instruction,
+                    previous_interaction_id=self.previous_interaction_id,
+                    timeout=self.timeout,
+                )
+            except Exception as exc:  # noqa: BLE001 - re-raised below unless transient
+                if not _is_transient(exc) or attempt == MAX_REQUEST_ATTEMPTS - 1:
+                    raise
+                last_error = exc
+                delay = RETRY_BACKOFF_SECONDS * (2**attempt)
+                logger.warning(
+                    "transient API failure (%s), retrying in %.1fs",
+                    type(exc).__name__,
+                    delay,
+                )
+                time.sleep(delay)
+
+        raise last_error  # unreachable; the loop either returns or raises
 
     @staticmethod
     def _function_calls(interaction: Any) -> list[Any]:

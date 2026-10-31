@@ -32,8 +32,8 @@ class Settings:
     def require_api_key(self) -> str:
         if not self.api_key:
             raise RuntimeError(
-                "GOOGLE_API_KEY is not set. Copy .env.example to .env and add a key "
-                "from https://aistudio.google.com/apikey"
+                "No API key found. Copy .env.example to .env and set GEMINI_API_KEY "
+                "with a key from https://aistudio.google.com/apikey"
             )
         return self.api_key
 
@@ -67,5 +67,8 @@ def get_settings() -> Settings:
         policy_markdown_path=processed / "store_policies.md",
         model=os.getenv("EMPORIO_MODEL", DEFAULT_MODEL).strip() or DEFAULT_MODEL,
         reference_date=_parse_reference_date(os.getenv("EMPORIO_REFERENCE_DATE")),
-        api_key=os.getenv("GOOGLE_API_KEY") or None,
+        # google-genai reads both names and prefers GOOGLE_API_KEY; the same
+        # precedence is mirrored here so this app and the SDK can never
+        # disagree about which key is in use.
+        api_key=os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY") or None,
     )
